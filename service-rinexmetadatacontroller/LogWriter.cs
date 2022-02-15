@@ -1,6 +1,6 @@
 ﻿using System;
-using System.Configuration;
 using System.Collections.Generic;
+using System.Configuration;
 using System.IO;
 
 namespace RinexMetaDataController
@@ -19,7 +19,7 @@ namespace RinexMetaDataController
 
         private LogWriter()
         {
-            bool.TryParse(ConfigurationManager.AppSettings["ShowWarning"],out showWarning);
+            bool.TryParse(ConfigurationManager.AppSettings["ShowWarning"], out showWarning);
         }
 
         public static LogWriter GetInstance
@@ -55,7 +55,7 @@ namespace RinexMetaDataController
             {
 
                 // Create log
-                Log msg = new Log("Error: " +e.Source.ToString().Trim() + " " + e.Message.ToString().Trim());
+                Log msg = new Log("Error: " + e.Source.ToString().Trim() + " " + e.Message.ToString().Trim());
                 Log stack = new Log("Stack: " + e.StackTrace.ToString().Trim());
                 LogQueue.Enqueue(msg);
                 LogQueue.Enqueue(stack);
@@ -91,7 +91,7 @@ namespace RinexMetaDataController
             while (LogQueue.Count > 0)
             {
                 Log entry = LogQueue.Dequeue();
-                string path = Path.Combine(LogPath,entry.GetDate() + "_" + LogFile);
+                string path = Path.Combine(LogPath, entry.GetDate() + "_" + LogFile);
                 stream = new FileStream(path, FileMode.Append, FileAccess.Write);
                 using (StreamWriter writer = new StreamWriter(stream))
                 {

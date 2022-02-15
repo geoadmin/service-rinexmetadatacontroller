@@ -1,16 +1,16 @@
-﻿using System;
+﻿using Rinex3Parser.Common;
+using Rinex3Parser.Obs;
+using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.Configuration;
+using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.IO.Compression;
-using System.Collections.Generic;
 using System.Linq;
-using Rinex3Parser.Common;
-using Rinex3Parser.Obs;
 using System.Security.Cryptography;
-using System.Diagnostics;
-using System.Configuration;
 using System.Threading.Tasks;
-using System.Globalization;
-using System.Collections.ObjectModel;
 using System.Xml;
 
 namespace RinexMetaDataController
@@ -165,15 +165,18 @@ namespace RinexMetaDataController
             {
                 Directory.CreateDirectory(dateShopPath);
             }
-            dbH = new DBHelper(Path.Combine(dbPath,String.Format("{0}_{1}", DateTime.Now.ToString("yyyy"), dbFile)));
+            dbH = new DBHelper(Path.Combine(dbPath, String.Format("{0}_{1}", DateTime.Now.ToString("yyyy"), dbFile)));
         }
 
         private static void ProcessingDay()
         {
             InitDay();
+            List<FileInfo> rinexInputFiles = new List<FileInfo>();
+            List<FileInfo> inputNAVFiles = new List<FileInfo>();
+
             stopwatchStep.Start();
-            LogWriter.WriteToLog(string.Format("Processing Day:{0}",dateTime.ToShortDateString()));
-            
+            LogWriter.WriteToLog(string.Format("Processing Day:{0}", dateTime.ToShortDateString()));
+
             // UNZIP Process
             DirectoryInfo dateRinexInputDIR = new DirectoryInfo(dateRinexInputPath);
             if (!dateRinexInputDIR.Exists)
@@ -181,44 +184,79 @@ namespace RinexMetaDataController
                 LogWriter.WriteToLog(string.Format("Input directory does not exist:{0}", dateRinexInputPath));
             }
             else
-            { 
+            {
                 FileInfo[] rinexInputZIPFiles = dateRinexInputDIR.GetFiles(ConfigurationManager.AppSettings["ZipFileExtension"]);
-                if (isParallel)
+                rinexInputFiles = new List<FileInfo>(rinexInputZIPFiles);
+                if (rinexInputZIPFiles.Count() > 0)
                 {
-                    Parallel.For(0, rinexInputZIPFiles.Length, i =>
+                    if (isParallel)
                     {
-                        Unzip(rinexInputZIPFiles[i]);
-                    });
+                        Parallel.For(0, rinexInputZIPFiles.Length, i =>
+                        {
+                            Unzip(rinexInputZIPFiles[i]);
+                        });
+                    }
+                    else
+                    {
+                        foreach (FileInfo file in rinexInputZIPFiles)
+                        {
+                            Unzip(file);
+                        }
+                    }
+                    LogWriter.WriteToLog(string.Format("Time to uncompress ZIP : {0:hh\\:mm\\:ss}", stopwatchStep.Elapsed));
+                    stopwatchStep.Restart();
+
+                    // Uncompress HATANAKA
+                    DirectoryInfo[] workPathDIRS = new DirectoryInfo(workPath).GetDirectories();
+                    foreach (DirectoryInfo workDIR in workPathDIRS)
+                    {
+                        FileInfo[] crxFiles = workDIR.GetFiles(ConfigurationManager.AppSettings["CompactRinexFileExtension"]);
+                        foreach (FileInfo crxFile in crxFiles)
+                        {
+                            string filenameExtension = Path.GetExtension(crxFile.FullName);
+                            string crxFileFullName = crxFile.FullName;
+                            string rnxFile = UncompressHatanaka(crxFileFullName);
+                            if (rnxFile.Length > 0)
+                            {
+                                File.Copy(rnxFile, Path.Combine(Path.Combine(workPath, "RNX"), Path.GetFileName(rnxFile)), true);
+                                File.Delete(crxFileFullName);
+                            }
+                        }
+                    }
+                    LogWriter.WriteToLog(string.Format("Time to uncompress Hatanaka: {0:hh\\:mm\\:ss}", stopwatchStep.Elapsed));
+                    stopwatchStep.Restart();
                 }
                 else
                 {
-                    foreach (FileInfo file in rinexInputZIPFiles)
+                    //Files not compressed
+                    FileInfo[] inputRNXFiles = dateRinexInputDIR.GetFiles(ConfigurationManager.AppSettings["rinexFileExtension"]);
+                    rinexInputFiles = new List<FileInfo>(inputRNXFiles);
+                    foreach (FileInfo inputRNXFile in inputRNXFiles)
                     {
-                        Unzip(file);
-                    }
-                }
-                LogWriter.WriteToLog(string.Format("Time to uncompress ZIP : {0:hh\\:mm\\:ss}", stopwatchStep.Elapsed));
-                stopwatchStep.Restart();
-
-                // Uncompress HATANAKA
-                DirectoryInfo[] workPathDIRS = new DirectoryInfo(workPath).GetDirectories();
-                foreach (DirectoryInfo workDIR in workPathDIRS)
-                {
-                    FileInfo[] crxFiles = workDIR.GetFiles(ConfigurationManager.AppSettings["CompactRinexFileExtension"]);
-                    foreach (FileInfo crxFile in crxFiles)
-                    {
-                        string filenameExtension = Path.GetExtension(crxFile.FullName);
-                        string crxFileFullName = crxFile.FullName;
-                        string rnxFile = UncompressHatanaka(crxFileFullName);
-                        if (rnxFile.Length > 0)
+                        if (!IsFileInUse(inputRNXFile.FullName))
                         {
-                            File.Copy(rnxFile, Path.Combine(Path.Combine(workPath, "RNX"), Path.GetFileName(rnxFile)),true);
-                            File.Delete(crxFileFullName);
+                            inputRNXFile.CopyTo(Path.Combine(Path.Combine(workPath, "RNX"), inputRNXFile.Name));
+                            string rnxShortName = ConvertToRinexShortName(inputRNXFile.Name);
+                            Directory.CreateDirectory(Path.Combine(workPath, rnxShortName + ".daf"));
+                            DirectoryInfo dafiRNXDIR = new DirectoryInfo(dateRinexInputPath);
+                            FileInfo[] dafiRNXFiles = dafiRNXDIR.GetFiles(Path.GetFileNameWithoutExtension(inputRNXFile.Name).Substring(0, inputRNXFile.Name.Length - 11) + "*");
+                            foreach (FileInfo dafiRNXFile in dafiRNXFiles)
+                            {
+                                if (!dafiRNXFile.Name.Contains(ConfigurationManager.AppSettings["rinexFileExtension"].ToString().Substring(1)))
+                                {
+                                    inputNAVFiles.Add(dafiRNXFile);
+                                }
+                                dafiRNXFile.CopyTo(Path.Combine(Path.Combine(workPath, rnxShortName + ".daf"), dafiRNXFile.Name));
+                            }
+                        }
+                        else
+                        {
+                            //Current Rinex File
+                            rinexInputFiles.Remove(inputRNXFile);
+                            LogWriter.WriteToLog("File in use: " + inputRNXFile.FullName);
                         }
                     }
                 }
-                LogWriter.WriteToLog(string.Format("Time to uncompress Hatanaka: {0:hh\\:mm\\:ss}", stopwatchStep.Elapsed));
-                stopwatchStep.Restart();
 
                 // Analyse RINEX
                 DirectoryInfo workRNXDIR = new DirectoryInfo(Path.Combine(workPath, "RNX"));
@@ -254,24 +292,33 @@ namespace RinexMetaDataController
                 stopwatchStep.Restart();
 
                 // Delete processed input Files
-                foreach (FileInfo rinexInputZIPFile in rinexInputZIPFiles)
+                foreach (FileInfo rinexInputFile in rinexInputFiles)
                 {
                     if (deleteInputData == 1)
                     {
-                        File.Delete(rinexInputZIPFile.FullName);
+                        File.Delete(rinexInputFile.FullName);
                     }
                     if (deleteInputData == 2)
                     {
-                        if (CleanUpFile(rinexInputZIPFile.FullName))
+                        if (CleanUpFile(rinexInputFile.FullName))
                         {
-                            File.Delete(rinexInputZIPFile.FullName);
+                            File.Delete(rinexInputFile.FullName);
                         }
                     }
                 }
+                // Delete navigation input Files if inputfiles were not compressed
+                foreach (FileInfo inputNAVFile in inputNAVFiles)
+                {
+                    if (deleteInputData == 1 || deleteInputData == 2)
+                    {
+                        File.Delete(inputNAVFile.FullName);
+                    }
+                }
+
                 LogWriter.WriteToLog(string.Format("Time to cleanup: {0:hh\\:mm\\:ss}", stopwatchStep.Elapsed));
                 stopwatchStep.Restart();
                 Directory.Delete(workPath, true);
-                LogWriter.WriteToLog(string.Format("Total {0} Files processed.", rinexInputZIPFiles.Length));
+                LogWriter.WriteToLog(string.Format("Total {0} Files processed.", rinexInputFiles.Count));
             }
             stopwatchStep.Reset();
         }
@@ -283,16 +330,47 @@ namespace RinexMetaDataController
             foreach (FileInfo workRNXFile in workRNXFiles)
             {
                 string rnxShortName = ConvertToRinexShortName(workRNXFile.Name);
-                string restOfName= workRNXFile.Name.Substring(9, workRNXFile.Name.Length -9);
+                string restOfName = workRNXFile.Name.Substring(9, workRNXFile.Name.Length - 9);
                 if (!workZipFolder.Name.Substring(0, workZipFolder.Name.Length - 7).Equals(workRNXFile.Name.Substring(0, workRNXFile.Name.Length - 7)))
                 {
-                    if ((!String.Format("{0}{1}", rnxShortName, rinexSuffix).Equals(workZipFolder.Name))&&(!workRNXFile.Name.Equals(string.Format("{0}00CHE{1}", workZipFolder.Name.Substring(0, 4), restOfName))))
+                    if ((!String.Format("{0}{1}", rnxShortName, rinexSuffix).Equals(workZipFolder.Name)) && (!workRNXFile.Name.Equals(string.Format("{0}00CHE{1}", workZipFolder.Name.Substring(0, 4), restOfName))))
                     {
                         LogWriter.WriteToLog(string.Format("Warning: Renamed Rinexlongname from: {0} to {1}", workRNXFile.Name, string.Format("{0}00CHE{1}", workZipFolder.Name.Substring(0, 4), restOfName)));
                         workRNXFile.MoveTo(Path.Combine(workRNXFile.DirectoryName, string.Format("{0}00CHE{1}", workZipFolder.Name.Substring(0, 4), restOfName)));
                     }
                 }
             }
+        }
+
+        private static bool IsFileInUse(string path)
+        {
+            if (string.IsNullOrEmpty(path))
+                throw new ArgumentException("'path' cannot be null or empty.", "path");
+
+            try
+            {
+                var lines = File.ReadLines(path);
+                foreach (var line in lines)
+                {
+                    if (line.StartsWith(">"))
+                    {
+                        if (line.Split(' ')[4] == DateTime.Now.Hour.ToString())
+                        {
+                            return true;
+                        }
+                        else
+                        {
+                            return false;
+                        }
+                    }
+                }
+            }
+            catch (IOException)
+            {
+                return true;
+            }
+
+            return false;
         }
 
         private static void ParseRinex(string file)
@@ -432,7 +510,7 @@ namespace RinexMetaDataController
             string hour = name.Substring(19, 2);
             if (!name.Substring(21, 2).Equals("00"))
             {
-                LogWriter.WriteToLog(String.Format("Warning: Hour in Rinexlongname not complete {0}.",name));
+                LogWriter.WriteToLog(String.Format("Warning: Hour in Rinexlongname not complete {0}.", name));
             }
             return string.Format("{0}{1}{2}", stationName, dayofYear, convertHourNumberToLetter(hour));
         }
@@ -456,7 +534,7 @@ namespace RinexMetaDataController
                     }
                 }
             }
-            foreach(string uncompleteDir in uncompleteHourList)
+            foreach (string uncompleteDir in uncompleteHourList)
             {
                 Directory.Delete(uncompleteDir);
             }
@@ -476,6 +554,16 @@ namespace RinexMetaDataController
                     }
                     ZipFile.CreateFromDirectory(workPathNow.FullName, Path.Combine(dateArchivPath, shortfilename));
                 }
+                else if (Path.GetExtension(workPathNow.Name).Equals(".daf"))
+                {
+                    string name = Path.GetFileNameWithoutExtension(workPathNow.Name);
+                    string filename = string.Format("{0}.zip", name);
+                    if (File.Exists(Path.Combine(dateArchivPath, filename)))
+                    {
+                        File.Delete(Path.Combine(dateArchivPath, filename));
+                    }
+                    ZipFile.CreateFromDirectory(workPathNow.FullName, Path.Combine(dateArchivPath, filename));
+                }
                 else
                 {
                     string zipfilename = "";
@@ -486,7 +574,7 @@ namespace RinexMetaDataController
                         {
                             File.Delete(Path.Combine(dateArchivPath, string.Format("{0}.zip", zipfilename)));
                         }
-                        ZipFile.CreateFromDirectory(workPathNow.FullName, Path.Combine(dateArchivPath, string.Format("{0}.zip",zipfilename)));
+                        ZipFile.CreateFromDirectory(workPathNow.FullName, Path.Combine(dateArchivPath, string.Format("{0}.zip", zipfilename)));
                     }
                     else
                     {
@@ -496,7 +584,7 @@ namespace RinexMetaDataController
             }
             catch (Exception e)
             {
-                LogWriter.WriteToLog(String.Format("Problem with ZIP: {0}. WorkPath:{1}",e,workPathNow.FullName));
+                LogWriter.WriteToLog(String.Format("Problem with ZIP: {0}. WorkPath:{1}", e, workPathNow.FullName));
             }
         }
 
@@ -628,9 +716,9 @@ namespace RinexMetaDataController
                 }
                 return false;
             }
-            catch(Exception e)
+            catch (Exception e)
             {
-                LogWriter.WriteToLog(String.Format("Warning: Problem while Reading ZIPArchiv={0}. Message = {1}",fileName, e.Message));
+                LogWriter.WriteToLog(String.Format("Warning: Problem while Reading ZIPArchiv={0}. Message = {1}", fileName, e.Message));
                 return false;
             }
             finally
@@ -645,7 +733,7 @@ namespace RinexMetaDataController
         private static string UncompressHatanaka(string file)
         {
             try
-            { 
+            {
                 Process proc = new Process();
                 proc.StartInfo.CreateNoWindow = true;
                 proc.StartInfo.WindowStyle = ProcessWindowStyle.Hidden;
@@ -659,7 +747,7 @@ namespace RinexMetaDataController
                 }
                 else
                 {
-                    LogWriter.WriteToLog(String.Format("Error: crx2rnx for file {0} did not work!",file));
+                    LogWriter.WriteToLog(String.Format("Error: crx2rnx for file {0} did not work!", file));
                     return "";
                 }
             }

@@ -39,7 +39,7 @@ namespace RinexMetaDataController
                 writer.WriteStartDocument();
                 writer.WriteStartElement("VectorObject");
                 writer.WriteAttributeString("xmlns", "xsi", "", "http://www.w3.org/2001/XMLSchema-instance");
-                writer.WriteAttributeString("xsi","noNamespaceSchemaLocation", "","../../Models/RINEX/RINEX3.OBJ.XSD");
+                writer.WriteAttributeString("xsi", "noNamespaceSchemaLocation", "", "../../Models/RINEX/RINEX3.OBJ.XSD");
                 writer.WriteElementString("GDSKey", "RINEX");
                 writer.WriteElementString("LayerKey", "RINEX_STATIONS");
                 writer.WriteElementString("TemporalKey", "2019");
@@ -52,7 +52,7 @@ namespace RinexMetaDataController
                 writer.WriteElementString("Commentary", commentary);
                 writer.WriteStartElement("Checksum");
                 writer.WriteAttributeString("Algorithmus", "MD5");
-                writer.WriteAttributeString("value",headerInfo.ChecksumMD5);
+                writer.WriteAttributeString("value", headerInfo.ChecksumMD5);
                 writer.WriteEndElement();
                 writer.WriteElementString("RinexVersion", headerInfo.RinexVersion);
                 writer.WriteElementString("RinexShortName", headerInfo.RinexShortName);
