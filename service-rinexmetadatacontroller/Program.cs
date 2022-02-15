@@ -349,18 +349,21 @@ namespace RinexMetaDataController
 
             try
             {
-                var lines = File.ReadLines(path);
-                foreach (var line in lines)
+                using (StreamReader sreee = new StreamReader(new FileStream(path, FileMode.Open, FileAccess.Read), System.Text.Encoding.UTF8))
                 {
-                    if (line.StartsWith(">"))
+                    string line = String.Empty;
+                    while ((line = sreee.ReadLine()) != null)
                     {
-                        if (line.Split(' ')[4] == DateTime.Now.Hour.ToString())
+                        if (line.StartsWith(">"))
                         {
-                            return true;
-                        }
-                        else
-                        {
-                            return false;
+                            if (line.Split(' ')[4] == DateTime.Now.Hour.ToString())
+                            {
+                                return true;
+                            }
+                            else
+                            {
+                                return false;
+                            }
                         }
                     }
                 }
@@ -369,7 +372,6 @@ namespace RinexMetaDataController
             {
                 return true;
             }
-
             return false;
         }
 
