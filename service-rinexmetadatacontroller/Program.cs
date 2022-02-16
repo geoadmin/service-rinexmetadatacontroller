@@ -234,15 +234,12 @@ namespace RinexMetaDataController
                     rinexInputFiles = new List<FileInfo>(inputRNXFiles);
                     foreach (FileInfo inputRNXFile in inputRNXFiles)
                     {
-                        if (inputRNXFile.Name.Contains(ConfigurationManager.AppSettings["RinexFileExtension"].ToString().Substring(1)))
+                        if (!IsFileInUse(inputRNXFile.FullName))
                         {
-                            if (!IsFileInUse(inputRNXFile.FullName))
-                            {
-                                inputRNXFile.CopyTo(Path.Combine(Path.Combine(workPath, "RNX"), inputRNXFile.Name));
-                                string rnxShortName = ConvertToRinexShortName(inputRNXFile.Name);
-                                Directory.CreateDirectory(Path.Combine(workPath, rnxShortName + ".daf"));
-                                inputOBSRNXFiles.Add(inputRNXFile);
-                            }
+                            inputRNXFile.CopyTo(Path.Combine(Path.Combine(workPath, "RNX"), inputRNXFile.Name));
+                            string rnxShortName = ConvertToRinexShortName(inputRNXFile.Name);
+                            Directory.CreateDirectory(Path.Combine(workPath, rnxShortName + ".daf"));
+                            inputOBSRNXFiles.Add(inputRNXFile);
                         }
                         else
                         {
@@ -367,10 +364,12 @@ namespace RinexMetaDataController
                         {
                             if (line.Split(' ')[4] == DateTime.Now.Hour.ToString())
                             {
+                                sreee.Dispose();
                                 return true;
                             }
                             else
                             {
+                                sreee.Dispose();
                                 return false;
                             }
                         }
