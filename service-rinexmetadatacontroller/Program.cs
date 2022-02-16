@@ -172,6 +172,7 @@ namespace RinexMetaDataController
         {
             InitDay();
             List<FileInfo> rinexInputFiles = new List<FileInfo>();
+            List<FileInfo> inputOBSRNXFiles = new List<FileInfo>();
             List<FileInfo> inputNAVFiles = new List<FileInfo>();
 
             stopwatchStep.Start();
@@ -229,24 +230,18 @@ namespace RinexMetaDataController
                 else
                 {
                     //Files not compressed
-                    FileInfo[] inputRNXFiles = dateRinexInputDIR.GetFiles(ConfigurationManager.AppSettings["rinexFileExtension"]);
+                    FileInfo[] inputRNXFiles = dateRinexInputDIR.GetFiles(ConfigurationManager.AppSettings["RinexFileExtension"]);
                     rinexInputFiles = new List<FileInfo>(inputRNXFiles);
                     foreach (FileInfo inputRNXFile in inputRNXFiles)
                     {
-                        if (!IsFileInUse(inputRNXFile.FullName))
+                        if (inputRNXFile.Name.Contains(ConfigurationManager.AppSettings["RinexFileExtension"].ToString().Substring(1)))
                         {
-                            inputRNXFile.CopyTo(Path.Combine(Path.Combine(workPath, "RNX"), inputRNXFile.Name));
-                            string rnxShortName = ConvertToRinexShortName(inputRNXFile.Name);
-                            Directory.CreateDirectory(Path.Combine(workPath, rnxShortName + ".daf"));
-                            DirectoryInfo dafiRNXDIR = new DirectoryInfo(dateRinexInputPath);
-                            FileInfo[] dafiRNXFiles = dafiRNXDIR.GetFiles(Path.GetFileNameWithoutExtension(inputRNXFile.Name).Substring(0, inputRNXFile.Name.Length - 11) + "*");
-                            foreach (FileInfo dafiRNXFile in dafiRNXFiles)
+                            if (!IsFileInUse(inputRNXFile.FullName))
                             {
-                                if (!dafiRNXFile.Name.Contains(ConfigurationManager.AppSettings["rinexFileExtension"].ToString().Substring(1)))
-                                {
-                                    inputNAVFiles.Add(dafiRNXFile);
-                                }
-                                dafiRNXFile.CopyTo(Path.Combine(Path.Combine(workPath, rnxShortName + ".daf"), dafiRNXFile.Name));
+                                inputRNXFile.CopyTo(Path.Combine(Path.Combine(workPath, "RNX"), inputRNXFile.Name));
+                                string rnxShortName = ConvertToRinexShortName(inputRNXFile.Name);
+                                Directory.CreateDirectory(Path.Combine(workPath, rnxShortName + ".daf"));
+                                inputOBSRNXFiles.Add(inputRNXFile);
                             }
                         }
                         else
@@ -254,6 +249,20 @@ namespace RinexMetaDataController
                             //Current Rinex File
                             rinexInputFiles.Remove(inputRNXFile);
                             LogWriter.WriteToLog("File in use: " + inputRNXFile.FullName);
+                        }
+                    }
+                    foreach (FileInfo inputOBSRNXFile in inputOBSRNXFiles)
+                    {
+                        DirectoryInfo dafiRNXDIR = new DirectoryInfo(dateRinexInputPath);
+                        FileInfo[] dafiRNXFiles = dafiRNXDIR.GetFiles(Path.GetFileNameWithoutExtension(inputOBSRNXFile.Name).Substring(0, inputOBSRNXFile.Name.Length - 11) + "*");
+                        string rnxShortName = ConvertToRinexShortName(inputOBSRNXFile.Name);
+                        foreach (FileInfo dafiRNXFile in dafiRNXFiles)
+                        {
+                            if (!dafiRNXFile.Name.Contains(ConfigurationManager.AppSettings["rinexFileExtension"].ToString().Substring(1)))
+                            {
+                                inputNAVFiles.Add(dafiRNXFile);
+                            }
+                            dafiRNXFile.CopyTo(Path.Combine(Path.Combine(workPath, rnxShortName + ".daf"), dafiRNXFile.Name));
                         }
                     }
                 }
