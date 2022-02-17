@@ -236,7 +236,7 @@ namespace RinexMetaDataController
                     {
                         if (!IsFileInUse(inputRNXFile.FullName))
                         {
-                            inputRNXFile.CopyTo(Path.Combine(Path.Combine(workPath, "RNX"), inputRNXFile.Name));
+                            inputRNXFile.CopyTo(Path.Combine(Path.Combine(workPath, "RNX"), inputRNXFile.Name),true);
                             string rnxShortName = ConvertToRinexShortName(inputRNXFile.Name);
                             Directory.CreateDirectory(Path.Combine(workPath, rnxShortName + ".daf"));
                             inputOBSRNXFiles.Add(inputRNXFile);
@@ -259,7 +259,7 @@ namespace RinexMetaDataController
                             {
                                 inputNAVFiles.Add(dafiRNXFile);
                             }
-                            dafiRNXFile.CopyTo(Path.Combine(Path.Combine(workPath, rnxShortName + ".daf"), dafiRNXFile.Name));
+                            dafiRNXFile.CopyTo(Path.Combine(Path.Combine(workPath, rnxShortName + ".daf"), dafiRNXFile.Name),true);
                         }
                     }
                 }
@@ -362,15 +362,24 @@ namespace RinexMetaDataController
                     {
                         if (line.StartsWith(">"))
                         {
-                            if (line.Split(' ')[4] == DateTime.Now.Hour.ToString())
+                            if (int.TryParse(line.Substring(13, 2), out int rinexhour))
                             {
-                                sreee.Dispose();
-                                return true;
+                                if (rinexhour == DateTime.Now.Hour)
+                                {
+                                    sreee.Close();
+                                    return true;
+                                }
+                                else
+                                {
+                                    sreee.Close();
+                                    return false;
+                                }
                             }
                             else
                             {
-                                sreee.Dispose();
-                                return false;
+                                LogWriter.WriteToLog("Could not parse hour in Line: " + line);
+                                sreee.Close();
+                                return true;
                             }
                         }
                     }
