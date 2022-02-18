@@ -229,23 +229,22 @@ namespace RinexMetaDataController
                 }
                 else
                 {
-                    //Files not compressed
+                    //Files not compressed -> DAFI Stations
                     FileInfo[] inputRNXFiles = dateRinexInputDIR.GetFiles(ConfigurationManager.AppSettings["RinexFileExtension"]);
                     rinexInputFiles = new List<FileInfo>(inputRNXFiles);
                     foreach (FileInfo inputRNXFile in inputRNXFiles)
                     {
                         if (!IsFileInUse(inputRNXFile.FullName))
                         {
-                            inputRNXFile.CopyTo(Path.Combine(Path.Combine(workPath, "RNX"), inputRNXFile.Name),true);
+                            inputRNXFile.CopyTo(Path.Combine(Path.Combine(workPath, "RNX"), inputRNXFile.Name), true);
                             string rnxShortName = ConvertToRinexShortName(inputRNXFile.Name);
                             Directory.CreateDirectory(Path.Combine(workPath, rnxShortName + ".daf"));
                             inputOBSRNXFiles.Add(inputRNXFile);
                         }
                         else
                         {
-                            //Current Rinex File
+                            //Current Rinex File -> in use
                             rinexInputFiles.Remove(inputRNXFile);
-                            LogWriter.WriteToLog("File in use: " + inputRNXFile.FullName);
                         }
                     }
                     foreach (FileInfo inputOBSRNXFile in inputOBSRNXFiles)
@@ -259,7 +258,7 @@ namespace RinexMetaDataController
                             {
                                 inputNAVFiles.Add(dafiRNXFile);
                             }
-                            dafiRNXFile.CopyTo(Path.Combine(Path.Combine(workPath, rnxShortName + ".daf"), dafiRNXFile.Name),true);
+                            dafiRNXFile.CopyTo(Path.Combine(Path.Combine(workPath, rnxShortName + ".daf"), dafiRNXFile.Name), true);
                         }
                     }
                 }
@@ -355,10 +354,10 @@ namespace RinexMetaDataController
 
             try
             {
-                using (StreamReader sreee = new StreamReader(new FileStream(path, FileMode.Open, FileAccess.Read), System.Text.Encoding.UTF8))
+                using (StreamReader streamReader = new StreamReader(new FileStream(path, FileMode.Open, FileAccess.Read), System.Text.Encoding.UTF8))
                 {
                     string line = String.Empty;
-                    while ((line = sreee.ReadLine()) != null)
+                    while ((line = streamReader.ReadLine()) != null)
                     {
                         if (line.StartsWith(">"))
                         {
@@ -366,19 +365,19 @@ namespace RinexMetaDataController
                             {
                                 if (rinexhour == DateTime.Now.Hour)
                                 {
-                                    sreee.Close();
+                                    streamReader.Close();
                                     return true;
                                 }
                                 else
                                 {
-                                    sreee.Close();
+                                    streamReader.Close();
                                     return false;
                                 }
                             }
                             else
                             {
                                 LogWriter.WriteToLog("Could not parse hour in Line: " + line);
-                                sreee.Close();
+                                streamReader.Close();
                                 return true;
                             }
                         }
