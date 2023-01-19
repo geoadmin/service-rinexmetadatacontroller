@@ -328,7 +328,7 @@ namespace RinexMetaDataController
             stopwatchStep.Reset();
         }
 
-        private static void CheckName(string workzipfolder)
+        private static void FixFileNames(string workzipfolder)
         {
             DirectoryInfo workZipFolder = new DirectoryInfo(workzipfolder);
             FileInfo[] workRNXFiles = workZipFolder.GetFiles();
@@ -343,6 +343,28 @@ namespace RinexMetaDataController
                         LogWriter.WriteToLog(string.Format("Warning: Renamed Rinexlongname from: {0} to {1}", workRNXFile.Name, string.Format("{0}00CHE{1}", workZipFolder.Name.Substring(0, 4), restOfName)));
                         workRNXFile.MoveTo(Path.Combine(workRNXFile.DirectoryName, string.Format("{0}00CHE{1}", workZipFolder.Name.Substring(0, 4), restOfName)));
                     }
+                }
+            }
+            // Check if Navigation Files and Observations Files have the same timestamp in the file
+            FileInfo[] workOBSFiles = workZipFolder.GetFiles("*MO.*x");
+            foreach (FileInfo workOBSFile in workOBSFiles)
+            {
+                //Naviation file with same hour
+                FileInfo[] workNAVFiles = workZipFolder.GetFiles(string.Format("{0}{1}", workOBSFile.Name.Substring(0, 21), "*N.rnx"));
+                if (workNAVFiles.Length < 1)
+                {
+                    LogWriter.WriteToLog(string.Format("Warning: No naviation file with same hour found in zipped file {0}", workzipfolder));
+                }
+                else
+                {
+                    FileInfo workNAVFile = workNAVFiles[0];
+                    if (workOBSFile.Name.Substring(21, 2) != workNAVFile.Name.Substring(21, 2))
+                    {
+                        string newName = string.Format("{0}{1}", workOBSFile.Name.Substring(0, 23), workNAVFile.Name.Substring(23, workNAVFile.Name.Length - 23));
+                        LogWriter.WriteToLog(string.Format("Warning: Renamed Navigation File from: {0} to {1}", workNAVFile.Name, newName));
+                        workNAVFile.MoveTo(Path.Combine(workNAVFile.DirectoryName, newName));
+                    }
+
                 }
             }
         }
@@ -496,7 +518,7 @@ namespace RinexMetaDataController
             try
             {
                 ZipFile.ExtractToDirectory(zipfile.FullName, Path.Combine(workPath, Path.GetFileNameWithoutExtension(zipfile.Name)));
-                CheckName(Path.Combine(workPath, Path.GetFileNameWithoutExtension(zipfile.Name)));
+                FixFileNames(Path.Combine(workPath, Path.GetFileNameWithoutExtension(zipfile.Name)));
                 if (isShop)
                 {
                     DirectoryCopy(Path.Combine(workPath, Path.GetFileNameWithoutExtension(zipfile.Name)), dateShopPath, false);
