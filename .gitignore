@@ -2,3 +2,6 @@
 System.Data.SQLite.Core.1.0.111.0
 Debug
 Release
+*.swp
+service-rinexmetadatacontroller/testdata/base_test/out_archiv
+service-rinexmetadatacontroller/testdata/base_test/out_shop
