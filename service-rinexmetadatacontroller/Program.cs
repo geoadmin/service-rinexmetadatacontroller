@@ -211,16 +211,31 @@ namespace RinexMetaDataController
                     DirectoryInfo[] workPathDIRS = new DirectoryInfo(workPath).GetDirectories();
                     foreach (DirectoryInfo workDIR in workPathDIRS)
                     {
-                        FileInfo[] crxFiles = workDIR.GetFiles(ConfigurationManager.AppSettings["CompactRinexFileExtension"]);
-                        foreach (FileInfo crxFile in crxFiles)
+                        if (workDIR.Name == "RNX")
                         {
-                            string filenameExtension = Path.GetExtension(crxFile.FullName);
-                            string crxFileFullName = crxFile.FullName;
-                            string rnxFile = UncompressHatanaka(crxFileFullName);
-                            if (rnxFile.Length > 0)
+                            continue;
+                        }
+                        FileInfo[] crxFiles = workDIR.GetFiles(ConfigurationManager.AppSettings["CompactRinexFileExtension"]);
+                        if (crxFiles.Length > 0)
+                        {
+                            foreach (FileInfo crxFile in crxFiles)
                             {
-                                File.Copy(rnxFile, Path.Combine(Path.Combine(workPath, "RNX"), Path.GetFileName(rnxFile)), true);
-                                File.Delete(crxFileFullName);
+                                string filenameExtension = Path.GetExtension(crxFile.FullName);
+                                string crxFileFullName = crxFile.FullName;
+                                string rnxFile = UncompressHatanaka(crxFileFullName);
+                                if (rnxFile.Length > 0)
+                                {
+                                    File.Copy(rnxFile, Path.Combine(Path.Combine(workPath, "RNX"), Path.GetFileName(rnxFile)), true);
+                                    File.Delete(crxFileFullName);
+                                }
+                            }
+                        }
+                        else
+                        {
+                            FileInfo[] rnxFiles = workDIR.GetFiles(ConfigurationManager.AppSettings["RinexFileExtension"]);
+                            foreach (FileInfo rnxFile in rnxFiles)
+                            {
+                                File.Copy(rnxFile.FullName, Path.Combine(Path.Combine(workPath, "RNX"), Path.GetFileName(rnxFile.FullName)), true);
                             }
                         }
                     }
@@ -522,6 +537,16 @@ namespace RinexMetaDataController
                 if (isShop)
                 {
                     DirectoryCopy(Path.Combine(workPath, Path.GetFileNameWithoutExtension(zipfile.Name)), dateShopPath, false);
+                    DirectoryInfo dateShopPathDIR = new DirectoryInfo(dateShopPath);
+                    FileInfo[] shopRNXObservationFiles = dateShopPathDIR.GetFiles("*O.rnx");
+                    foreach (FileInfo rnxOBSFile in shopRNXObservationFiles)
+                    {
+                        string crxFile = CompressHatanaka(rnxOBSFile.FullName);
+                        if (crxFile.Length > 0)
+                        {
+                            rnxOBSFile.Delete();
+                        }
+                    }
                 }
             }
             catch (Exception e)
@@ -609,7 +634,8 @@ namespace RinexMetaDataController
                     string zipfilename = "";
                     if (workPathNow.FullName.EndsWith(rinexSuffix))
                     {
-                        zipfilename = workPathNow.Name.Substring(0, workPathNow.Name.Length - 1);
+                        zipfilename = workPathNow.Name.Substring(0, workPathNow.Name.Length);
+                        //zipfilename = workPathNow.Name.Substring(0, workPathNow.Name.Length - 1);
                         if (File.Exists(Path.Combine(dateArchivPath, string.Format("{0}.zip", zipfilename))))
                         {
                             File.Delete(Path.Combine(dateArchivPath, string.Format("{0}.zip", zipfilename)));
@@ -767,6 +793,34 @@ namespace RinexMetaDataController
                 {
                     archiv.Dispose();
                 }
+            }
+        }
+
+        private static string CompressHatanaka(string file)
+        {
+            try
+            {
+                Process proc = new Process();
+                proc.StartInfo.CreateNoWindow = true;
+                proc.StartInfo.WindowStyle = ProcessWindowStyle.Hidden;
+                proc.StartInfo.FileName = "cmd.exe";
+                proc.StartInfo.Arguments = String.Format("/C rnx2crx.exe -f {0}", file);
+                proc.Start();
+                proc.WaitForExit();
+                if (proc.ExitCode == 0)
+                {
+                    return Path.ChangeExtension(file, "crx");
+                }
+                else
+                {
+                    LogWriter.WriteToLog(String.Format("Error: rnx2crx for file {0} did not work!", file));
+                    return "";
+                }
+            }
+            catch (Exception e)
+            {
+                LogWriter.WriteToLog(e);
+                return "";
             }
         }
 
